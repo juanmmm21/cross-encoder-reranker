@@ -150,8 +150,20 @@ class CrossEncoderReranker:
             ratio = len(overlap) / len(query_words)
             density_bonus = len(overlap) / len(doc_words) if doc_words else 0.0
             
-            # Escalamos el score para simular los logits de un Cross-Encoder
-            scores.append(float(ratio * 5.0 + density_bonus))
+            score = float(ratio * 5.0 + density_bonus)
+            
+            # Penalizacion de paginas de bibliografia, indices o anexos (sin importar acentos)
+            doc_lower = doc.lower()
+            accents = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ü": "u", "ñ": "n"}
+            doc_norm = doc_lower
+            for a, b in accents.items():
+                doc_norm = doc_norm.replace(a, b)
+                
+            penalty_keywords = ["bibliografia", "webgrafia", "indice de", "anexo", "referencias"]
+            if any(kw in doc_norm[:120] for kw in penalty_keywords):
+                score -= 3.0
+                
+            scores.append(score)
             
         return scores
 
