@@ -67,9 +67,19 @@ class CrossEncoderReranker:
 
     def _tokenize_clean(self, text: str) -> List[str]:
         """
-        Tokeniza y limpia un string basico (sin dependencias adicionales).
+        Tokeniza y limpia un string basico, normalizando acentos y extrayendo stems.
         """
-        return re.findall(r'\b\w+\b', text.lower())
+        accents = {"á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ü": "u", "ñ": "n"}
+        text_norm = text.lower()
+        for a, b in accents.items():
+            text_norm = text_norm.replace(a, b)
+        words = re.findall(r'\b\w+\b', text_norm)
+        tokens = []
+        for w in words:
+            tokens.append(w)
+            if len(w) > 4:
+                tokens.append(w[:4])
+        return tokens
 
     def compute_scores(self, query: str, documents: List[str]) -> List[float]:
         """
