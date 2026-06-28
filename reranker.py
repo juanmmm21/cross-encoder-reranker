@@ -41,6 +41,16 @@ class CrossEncoderReranker:
         self.model_name = model_name
         self.is_online = DL_AVAILABLE
         
+        # Stop-words basicas en español e ingles para reducir ruido en modo offline
+        self.stopwords = {
+            "el", "la", "los", "las", "un", "una", "unos", "unas", "y", "o", "pero", "si", "no",
+            "de", "del", "a", "al", "en", "con", "por", "para", "como", "que", "es", "son",
+            "cuales", "cual", "como", "cuando", "donde", "quien", "quienes", "que", "porque", "por que",
+            "algun", "alguna", "algunos", "algunas", "otro", "otra", "otros", "otras", "este", "esta",
+            "estos", "estas", "un", "una", "todo", "todos", "toda", "todas",
+            "the", "a", "an", "and", "or", "but", "if", "not", "of", "to", "in", "with", "for", "is", "are"
+        }
+        
         if self.is_online:
             # Seleccion inteligente del dispositivo
             if device is None:
@@ -76,7 +86,11 @@ class CrossEncoderReranker:
         words = re.findall(r'\b\w+\b', text_norm)
         tokens = []
         for w in words:
+            if w in self.stopwords:
+                continue
             tokens.append(w)
+            if len(w) > 3:
+                tokens.append(w[:3])
             if len(w) > 4:
                 tokens.append(w[:4])
         return tokens
