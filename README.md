@@ -1,80 +1,80 @@
 # cross-encoder-reranker
 
-Modulo reordenador (Reranker) de alta precision basado en la arquitectura Cross-Encoder de redes neuronales Transformer.
+High-precision reranking module (Reranker) based on the Cross-Encoder architecture of Transformer neural networks.
 
-Este componente actua como la segunda etapa (Stage-2) en sistemas de busqueda semantica y pipelines de Generacion Aumentada por Recuperacion (RAG). Recibe una lista preliminar de documentos candidatos recuperados de manera veloz por metodos de primera etapa (como busqueda vectorial o BM25) y calcula una puntuacion exhaustiva de atencion cruzada para ordenar los elementos, reduciendo el ruido e inyectando solo el contexto de mayor relevancia real en la ventana de contexto del LLM.
+This component acts as the second stage (Stage-2) in semantic search systems and Retrieval-Augmented Generation (RAG) pipelines. It receives a preliminary list of candidate documents quickly retrieved by first-stage methods (such as vector search or BM25) and computes an exhaustive cross-attention score to rank the items, reducing noise and injecting only the most genuinely relevant context into the LLM's context window.
 
-## Arquitectura y Fundamentos Teoricos
+## Architecture and Theoretical Foundations
 
-El diseno de recuperacion en dos fases resuelve el compromiso entre costo computacional y precision semantica.
+The two-phase retrieval design resolves the trade-off between computational cost and semantic precision.
 
 ```mermaid
 graph TD
-    Query[Consulta del Usuario] --> Stage1[Fase 1: Recuperacion Rapida]
-    Corpus[(Millones de Documentos)] --> Stage1
+    Query[User Query] --> Stage1[Stage 1: Fast Retrieval]
+    Corpus[(Millions of Documents)] --> Stage1
     
-    Stage1 -->|Bi-Encoder / BM25| Candidates[Top 50-100 Candidatos]
+    Stage1 -->|Bi-Encoder / BM25| Candidates[Top 50-100 Candidates]
     
-    Query --> Stage2[Fase 2: Reordenamiento Preciso]
+    Query --> Stage2[Stage 2: Precise Reranking]
     Candidates --> Stage2
     
     subgraph Cross-Encoder
-        Stage2 --> PairConcat[Pares Consulta + Documento]
+        Stage2 --> PairConcat[Query + Document Pairs]
         PairConcat --> CrossAttention[Full Cross-Attention layers]
         CrossAttention --> ClassificationHead[Linear Rerank Classification Head]
     end
     
-    ClassificationHead --> FinalRank[Top 3-5 Documentos Finales]
+    ClassificationHead --> FinalRank[Top 3-5 Final Documents]
 ```
 
-### 1. Comparativa: Bi-Encoder vs Cross-Encoder
+### 1. Comparison: Bi-Encoder vs Cross-Encoder
 
-La diferencia radica en como interactuan la consulta y el documento dentro del modelo Transformer:
+The difference lies in how the query and the document interact within the Transformer model:
 
-*   **Bi-Encoder (Fase 1 - Recuperacion):** Codifica por separado la consulta $Q$ y el documento $D$:
+*   **Bi-Encoder (Stage 1 - Retrieval):** Encodes the query $Q$ and the document $D$ separately:
     $$\mathbf{u} = \text{Transformer}(Q), \quad \mathbf{v} = \text{Transformer}(D)$$
-    La similitud se estima mediante una operacion simple en sus vectores resultantes:
+    Similarity is estimated via a simple operation on the resulting vectors:
     $$\text{sim}(Q, D) = \cos(\mathbf{u}, \mathbf{v}) = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\| \|\mathbf{v}\|}$$
-    *Complejidad:* $O(L_Q + L_D)$ en inferencia. Al no existir interaccion entre los terminos de $Q$ y $D$ durante las capas de autoatencion, se pierden relaciones de sintaxis y precision contextual fina.
-*   **Cross-Encoder (Fase 2 - Reordenamiento):** Alimenta al Transformer con la secuencia conjunta de ambos textos:
+    *Complexity:* $O(L_Q + L_D)$ at inference. Since there is no interaction between the terms of $Q$ and $D$ during the self-attention layers, fine-grained syntactic relationships and contextual precision are lost.
+*   **Cross-Encoder (Stage 2 - Reranking):** Feeds the Transformer with the joint sequence of both texts:
     $$\mathbf{x} = [CLS] + Q + [SEP] + D + [SEP]$$
-    *Complejidad:* $O((L_Q + L_D)^2)$ debido al calculo de la matriz de atencion sobre la secuencia unificada. Cada token de la consulta tiene la capacidad de interactuar directamente con cada token del documento en todas las capas del modelo, permitiendo identificar negaciones, sinonimos condicionales y correlaciones tematicas profundas.
+    *Complexity:* $O((L_Q + L_D)^2)$ due to computing the attention matrix over the unified sequence. Each query token can directly interact with every document token across all layers of the model, making it possible to identify negations, conditional synonyms, and deep thematic correlations.
 
-### 2. Clasificacion de Secuencias Emparejadas
+### 2. Paired Sequence Classification
 
-El token de clasificacion $[CLS]$ acumula la representacion agregada de toda la secuencia cruzada. La salida final es proyectada por una capa lineal para obtener un logit escalar de relevancia:
+The classification token $[CLS]$ accumulates the aggregated representation of the entire cross sequence. The final output is projected through a linear layer to obtain a scalar relevance logit:
 
 $$s(Q, D) = W \cdot \mathbf{h}_{[CLS]} + b$$
 
-Donde $\mathbf{h}_{[CLS]}$ es el vector de estado oculto del token $[CLS]$ en la ultima capa del Transformer, $W$ es la matriz de pesos de proyeccion de la cabeza de secuencia y $b$ es el sesgo. Puesto que se trata de una tarea de regresion (tipicamente entrenada bajo conjuntos de datos como MS MARCO), las puntuaciones obtenidas no estan acotadas entre $0$ y $1$, representando la afinidad logaritmica de la consulta.
+Where $\mathbf{h}_{[CLS]}$ is the hidden state vector of the $[CLS]$ token in the last layer of the Transformer, $W$ is the weight matrix of the sequence head projection, and $b$ is the bias. Since this is a regression task (typically trained on datasets such as MS MARCO), the resulting scores are not bounded between $0$ and $1$, representing the logarithmic affinity of the query.
 
-### 3. Logica de Fallback Offline (Algoritmo de Solapamiento Lexico)
+### 3. Offline Fallback Logic (Lexical Overlap Algorithm)
 
-Para garantizar la resiliencia en entornos locales con restricciones de recursos, el modulo incorpora un motor heuristico de similitud lexica normalizada que se activa si las dependencias de Deep Learning (`torch`, `transformers`) no estan presentes o falla la carga del modelo pre-entrenado:
+To ensure resilience in resource-constrained local environments, the module includes a normalized lexical similarity heuristic engine that activates if the Deep Learning dependencies (`torch`, `transformers`) are not present or the pre-trained model fails to load:
 
 $$\text{Score}_{\text{offline}}(Q, D) = 5.0 \cdot \left( \frac{|Q_{\text{tokens}} \cap D_{\text{tokens}}|}{|Q_{\text{tokens}}|} \right) + \frac{|Q_{\text{tokens}} \cap D_{\text{tokens}}|}{|D_{\text{tokens}}|}$$
 
-Donde:
-*   El primer termino calcula la proporcion de terminos de la consulta presentes en el documento, escalado por un factor multiplicador de `5.0`.
-*   El segundo termino actua como un bono de densidad, priorizando aquellos documentos mas concisos que condensan la respuesta, disminuyendo el peso si el documento contiene un exceso de palabras irrelevantes.
+Where:
+*   The first term calculates the proportion of query terms present in the document, scaled by a multiplying factor of `5.0`.
+*   The second term acts as a density bonus, prioritizing more concise documents that condense the answer, reducing the weight if the document contains an excess of irrelevant words.
 
-## Conexion con el Ecosistema
+## Connection to the Ecosystem
 
-Este modulo optimiza las respuestas de otros componentes del ecosistema:
-1.  **hybrid-search-retrieval-pipeline:** Recibe la lista preliminar de candidatos devueltos por RRF o Score Normalization (por ejemplo, 30 candidatos). El Reranker aplica el analisis Cross-Encoder y reduce este conjunto a los 3-5 documentos con mayor relevancia empirica.
-2.  **Orquestador General RAG:** Actua como filtro de paso intermedio antes de alimentar el prompt de sintesis del LLM, reduciendo costes de procesamiento (tokens de entrada) y mitigando el fenomeno de "perdida en el medio" (*lost in the middle*), donde los modelos de lenguaje tienden a ignorar informacion ubicada en la franja central de prompts excesivamente extensos.
+This module optimizes the responses of other components in the ecosystem:
+1.  **hybrid-search-retrieval-pipeline:** Receives the preliminary list of candidates returned by RRF or Score Normalization (e.g., 30 candidates). The Reranker applies Cross-Encoder analysis and reduces this set to the 3-5 documents with the highest empirical relevance.
+2.  **General RAG Orchestrator:** Acts as an intermediate filtering pass before feeding the LLM's synthesis prompt, reducing processing costs (input tokens) and mitigating the "lost in the middle" phenomenon, where language models tend to ignore information located in the central portion of excessively long prompts.
 
-## Estructura del Proyecto
+## Project Structure
 
-*   `reranker.py`: Contiene la clase `CrossEncoderReranker`, que implementa la logica de seleccion de hardware, tokenizacion bidireccional, inferencia a traves de PyTorch y el fallback de solapamiento lexico offline.
-*   `test_reranker.py`: Suite de pruebas automatizadas que verifican el correcto funcionamiento de las funciones de puntuacion offline y la integracion del pipeline de inferencia utilizando simulación de tensores.
-*   `example.py`: Demostracion ejecutable que procesa una consulta sobre varios candidatos conceptualmente dispares, imprimiendo el cambio de orden en los rankings provocado por el reordenamiento.
+*   `reranker.py`: Contains the `CrossEncoderReranker` class, which implements hardware selection logic, bidirectional tokenization, inference via PyTorch, and the offline lexical overlap fallback.
+*   `test_reranker.py`: Automated test suite that verifies the correct functioning of the offline scoring functions and the inference pipeline integration using tensor simulation.
+*   `example.py`: Executable demonstration that processes a query over several conceptually disparate candidates, printing the change in ranking order caused by the reranking.
 
-## Instalacion y Requisitos
+## Installation and Requirements
 
-### 1. Activar el Entorno Virtual e Instalar Dependencias
+### 1. Activate the Virtual Environment and Install Dependencies
 
-Asegurese de instalar las dependencias requeridas para soportar la ejecucion de modelos de Hugging Face:
+Make sure to install the required dependencies to support running Hugging Face models:
 
 ```bash
 python3 -m venv .venv
@@ -82,17 +82,17 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Ejecutar Pruebas Unitarias
+### 2. Run Unit Tests
 
-Para comprobar los algoritmos de calculo local de scores y el control de dispositivos de hardware:
+To check the local score computation algorithms and hardware device control:
 
 ```bash
 .venv/bin/python -m unittest test_reranker.py
 ```
 
-### 3. Ejecutar Codigo de Demostracion
+### 3. Run Demo Code
 
-Para verificar la inferencia del Cross-Encoder (`ms-marco-MiniLM-L-6-v2`) sobre la CPU o aceleradores locales (MPS/CUDA):
+To verify Cross-Encoder inference (`ms-marco-MiniLM-L-6-v2`) on CPU or local accelerators (MPS/CUDA):
 
 ```bash
 .venv/bin/python example.py
