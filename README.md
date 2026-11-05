@@ -70,6 +70,24 @@ This module optimizes the responses of other components in the ecosystem:
 *   `test_reranker.py`: Automated test suite that verifies the correct functioning of the offline scoring functions and the inference pipeline integration using tensor simulation.
 *   `example.py`: Executable demonstration that processes a query over several conceptually disparate candidates, printing the change in ranking order caused by the reranking.
 
+## Using it as a package
+
+Since `0.1.0` the code lives in the `cross_encoder_reranker` package and the repository is
+pip-installable, so other projects can depend on it instead of copying files
+or editing `sys.path`:
+
+```bash
+pip install "cross-encoder-reranker @ git+https://github.com/juanmmm21/cross-encoder-reranker.git@v0.1.0"
+```
+
+```python
+from cross_encoder_reranker import CrossEncoderReranker
+```
+
+The old top-level modules are kept as thin re-exports, so sibling
+`ai-core-infra` repos that add this folder to `sys.path` keep working
+unchanged.
+
 ## Installation and Requirements
 
 ### 1. Activate the Virtual Environment and Install Dependencies
