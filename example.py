@@ -1,7 +1,7 @@
 import time
 from typing import List, Dict, Any
 
-from reranker import CrossEncoderReranker
+from cross_encoder_reranker.reranker import CrossEncoderReranker
 
 def main() -> None:
     print("==================================================")

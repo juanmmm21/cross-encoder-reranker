@@ -8,7 +8,7 @@ try:
 except ImportError:
     torch = None
 
-from reranker import CrossEncoderReranker
+from cross_encoder_reranker.reranker import CrossEncoderReranker
 
 
 class TestCrossEncoderReranker(unittest.TestCase):
@@ -65,8 +65,8 @@ class TestCrossEncoderReranker(unittest.TestCase):
         self.assertTrue(ranked[0]["rerank_score"] > ranked[1]["rerank_score"])
 
     @unittest.skipIf(torch is None, "PyTorch no esta instalado en el sistema global")
-    @patch("reranker.AutoModelForSequenceClassification")
-    @patch("reranker.AutoTokenizer")
+    @patch("cross_encoder_reranker.reranker.AutoModelForSequenceClassification")
+    @patch("cross_encoder_reranker.reranker.AutoTokenizer")
     def test_online_inference_mock(self, mock_tokenizer_class, mock_model_class) -> None:
         """
         Simula la llamada al modelo Transformer de Hugging Face y comprueba

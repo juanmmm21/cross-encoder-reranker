@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cross-encoder-reranker"
+version = "0.1.0"
+description = "Cross-encoder reranker with an offline lexical fallback."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Juan Martos Cuevas", email = "martoscuevasjuan@gmail.com" }]
+dependencies = [
+    "numpy>=1.20",
+    "torch>=2.0",
+    "transformers>=4.30",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cross_encoder_reranker"]
