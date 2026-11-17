@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import MagicMock, patch
-import numpy as np
 
 # Intentamos importar torch si esta disponible para la prueba mockeada de PyTorch
 try:

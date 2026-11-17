@@ -1,5 +1,4 @@
 import time
-from typing import List, Dict, Any
 
 from cross_encoder_reranker.reranker import CrossEncoderReranker
 
