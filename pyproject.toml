@@ -4,16 +4,23 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cross-encoder-reranker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cross-encoder reranker with an offline lexical fallback."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Juan Martos Cuevas", email = "martoscuevasjuan@gmail.com" }]
 dependencies = [
     "numpy>=1.20",
+]
+
+[project.optional-dependencies]
+# The real cross-encoder. Without it the reranker runs its offline lexical scorer, which is
+# what the reranker already did when torch/transformers failed to import.
+model = [
     "torch>=2.0",
     "transformers>=4.30",
 ]
+dev = ["pytest>=8", "ruff>=0.6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["cross_encoder_reranker"]

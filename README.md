@@ -77,7 +77,8 @@ pip-installable, so other projects can depend on it instead of copying files
 or editing `sys.path`:
 
 ```bash
-pip install "cross-encoder-reranker @ git+https://github.com/juanmmm21/cross-encoder-reranker.git@v0.1.0"
+pip install "cross-encoder-reranker @ git+https://github.com/juanmmm21/cross-encoder-reranker.git@v0.2.0"          # lexical scorer only
+pip install "cross-encoder-reranker[model] @ git+https://github.com/juanmmm21/cross-encoder-reranker.git@v0.2.0"   # + torch/transformers cross-encoder
 ```
 
 ```python
